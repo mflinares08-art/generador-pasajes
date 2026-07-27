@@ -1,15 +1,15 @@
 import streamlit as st
 import io
 from datetime import datetime
+from PIL import Image
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 st.set_page_config(page_title="Generador de Pasajes", page_icon="🚌", layout="wide")
 st.title("🚌 Generador de Pasajes de Colectivo")
 
-# Días de la semana en español
 DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
 
 def obtener_dia_semana(fecha_str):
@@ -18,6 +18,10 @@ def obtener_dia_semana(fecha_str):
         return DIAS_SEMANA[fecha_dt.weekday()]
     except Exception:
         return "Día inválido"
+
+# Subidor de logo en la barra lateral o dentro del form
+st.sidebar.header("🎨 Personalización")
+logo_file = st.sidebar.file_uploader("Subir Logo de Empresa (PNG o JPG)", type=["png", "jpg", "jpeg"])
 
 with st.form("form_pasaje"):
     col_emp, col_pas, col_vía = st.columns(3)
@@ -38,24 +42,32 @@ with st.form("form_pasaje"):
         asiento = st.text_input("Asiento", value="65")
         precio = st.text_input("Precio", value="$ 131000.00")
 
-    # Cálculo automático del día
     dia_detectado = obtener_dia_semana(fecha_salida)
     st.info(f"📅 **Día de la semana detectado automáticamente:** {dia_detectado}")
 
     btn_generar = st.form_submit_button("🔥 GENERAR PASAJE PDF", use_container_width=True)
 
-def crear_columna_cuerpo(titulo_talon, datos, styles):
-    # Estilos limpios sin fondo para impresora térmica
+def crear_columna_cuerpo(titulo_talon, datos, logo_img, styles):
     style_emp = ParagraphStyle('Emp', fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=1, textColor=colors.black)
-    style_lbl = ParagraphStyle('Lbl', fontName='Helvetica-Bold', fontSize=7, leading=8, textColor=colors.black)
     style_val = ParagraphStyle('Val', fontName='Helvetica-Bold', fontSize=8.5, leading=10, textColor=colors.black)
     style_txt = ParagraphStyle('Txt', fontName='Helvetica', fontSize=8, leading=9.5, textColor=colors.black)
     style_talon = ParagraphStyle('Talon', fontName='Helvetica-Oblique', fontSize=6.5, leading=7.5, alignment=1, textColor=colors.black)
 
-    # Estructura horizontal/apaisada para reducir altura
+    # Si hay logo cargado, creamos el elemento de imagen para ReportLab
+    img_element = ""
+    if logo_img:
+        # Guardar la imagen temporalmente en memoria para ReportLab
+        img_buffer = io.BytesIO()
+        logo_img.save(img_buffer, format="PNG")
+        img_buffer.seek(0)
+        # Escalamos la imagen a un tamaño adecuado para el ticket (ej: ancho 90px, alto proporcional)
+        img_element = RLImage(img_buffer, width=80, height=30)
+
     filas = [
-        # Encabezado Empresa
-        [Paragraph(f"<b>{datos['empresa']}</b>", style_emp), Paragraph("", style_txt)],
+        # Encabezado: Logo (si hay) y Nombre de la Empresa
+        [img_element if img_element else Paragraph(f"<b>{datos['empresa']}</b>", style_emp), 
+         Paragraph(f"<b>{datos['empresa']}</b>" if img_element else "", style_emp)],
+        
         [Spacer(1, 2), Spacer(1, 2)],
         
         # Pasajero y Documento
@@ -77,23 +89,27 @@ def crear_columna_cuerpo(titulo_talon, datos, styles):
         [Paragraph(f"<b>Nº PASAJE:</b> <b>{datos['numero_pasaje']}</b>", style_txt),
          Paragraph(f"<b>ANUNCIO:</b> {datos['se_anuncia_a']}", style_txt)],
         
-        [Spacer(1, 6), Spacer(1, 6)],
-        # Talón al final de todo y discreto
+        [Spacer(1, 4), Spacer(1, 4)],
+        # Talón al final
         [Paragraph(f"--- {titulo_talon} ---", style_talon), Paragraph("", style_talon)]
     ]
 
     t = Table(filas, colWidths=[140, 115])
     t.setStyle(TableStyle([
-        ('SPAN', (0, 0), (1, 0)),  # Empresa ocupa ancho completo
-        ('SPAN', (0, 6), (1, 6)),  # Spacer ocupa ancho completo
-        ('SPAN', (0, 7), (1, 7)),  # Talón ocupa ancho completo
-        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),  # Borde negro fino sin fondo
+        ('SPAN', (0, 0), (1, 0)) if not img_element else ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('SPAN', (0, 7), (1, 7)),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
         ('PADDING', (0, 0), (-1, -1), 3),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     return t
 
 if btn_generar:
+    # Cargar la imagen del logo si el usuario la subió
+    logo_img = None
+    if logo_file is not None:
+        logo_img = Image.open(logo_file)
+
     datos = {
         "empresa": empresa, "se_anuncia_a": se_anuncia_a, "pasajero_nombre": pasajero_nombre,
         "pasajero_doc": pasajero_doc, "pasajero_nac": pasajero_nac, "origen": origen,
@@ -106,9 +122,9 @@ if btn_generar:
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=10, leftMargin=10, topMargin=10, bottomMargin=10)
     styles = getSampleStyleSheet()
 
-    c1 = crear_columna_cuerpo("TALÓN EMPRESA", datos, styles)
-    c2 = crear_columna_cuerpo("TALÓN GUARDA", datos, styles)
-    c3 = crear_columna_cuerpo("TALÓN PASAJERO", datos, styles)
+    c1 = crear_columna_cuerpo("TALÓN EMPRESA", datos, logo_img, styles)
+    c2 = crear_columna_cuerpo("TALÓN GUARDA", datos, logo_img, styles)
+    c3 = crear_columna_cuerpo("TALÓN PASAJERO", datos, logo_img, styles)
     div_v = Paragraph("<br/>|<br/>|<br/>|<br/>|<br/>|<br/>|<br/>|<br/>|", ParagraphStyle('Div', fontName='Helvetica', fontSize=7, textColor=colors.black, alignment=1))
 
     tabla_principal = Table([[c1, div_v, c2, div_v, c3]], colWidths=[257, 10, 257, 10, 257])
@@ -122,5 +138,5 @@ if btn_generar:
     doc.build([tabla_principal])
     buffer.seek(0)
 
-    st.success("¡Pasaje listo!")
+    st.success("¡Pasaje generado con logo!")
     st.download_button(label="📥 DESCARGAR PASAJE PDF", data=buffer, file_name=f"pasaje_{pasajero_nombre.replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
