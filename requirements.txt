@@ -1,4 +1,4 @@
-streamlit==1.38.0
+streamlit
 reportlab
 Pillow
-starlette==0.38.2
+starlette
