@@ -51,7 +51,7 @@ def crear_columna_cuerpo(titulo_talon, datos, logo_img, styles):
     style_emp = ParagraphStyle('Emp', fontName='Helvetica-Bold', fontSize=10, leading=12, alignment=1, textColor=colors.black)
     style_val = ParagraphStyle('Val', fontName='Helvetica-Bold', fontSize=8.5, leading=10, textColor=colors.black)
     style_txt = ParagraphStyle('Txt', fontName='Helvetica', fontSize=8, leading=9.5, textColor=colors.black)
-    style_talon = ParagraphStyle('Talon', fontName='Helvetica-Oblique', fontSize=6.5, leading=7.5, alignment=1, textColor=colors.black)
+    style_talon = ParagraphStyle('Talon', fontName='Helvetica-Bold', fontSize=6.5, leading=8, alignment=1, textColor=colors.black)
 
     # Si hay logo cargado, creamos el elemento de imagen para ReportLab
     img_element = ""
@@ -60,7 +60,7 @@ def crear_columna_cuerpo(titulo_talon, datos, logo_img, styles):
         img_buffer = io.BytesIO()
         logo_img.save(img_buffer, format="PNG")
         img_buffer.seek(0)
-        # Escalamos la imagen a un tamaño adecuado para el ticket (ej: ancho 90px, alto proporcional)
+        # Escalamos la imagen a un tamaño adecuado para el ticket
         img_element = RLImage(img_buffer, width=80, height=30)
 
     filas = [
@@ -90,8 +90,8 @@ def crear_columna_cuerpo(titulo_talon, datos, logo_img, styles):
          Paragraph(f"<b>ANUNCIO:</b> {datos['se_anuncia_a']}", style_txt)],
         
         [Spacer(1, 4), Spacer(1, 4)],
-        # Talón al final
-        [Paragraph(f"--- {titulo_talon} ---", style_talon), Paragraph("", style_talon)]
+        # Leyenda de comprobante y talón al final de cada cuerpo
+        [Paragraph(f"<b>{titulo_talon}<br/>COMPROBANTE DE BOLETO - SOLO VALIDO PARA ABORDAR</b>", style_talon), Paragraph("", style_talon)]
     ]
 
     t = Table(filas, colWidths=[140, 115])
@@ -138,5 +138,5 @@ if btn_generar:
     doc.build([tabla_principal])
     buffer.seek(0)
 
-    st.success("¡Pasaje generado con logo!")
+    st.success("¡Pasaje generado con leyenda de abordaje!")
     st.download_button(label="📥 DESCARGAR PASAJE PDF", data=buffer, file_name=f"pasaje_{pasajero_nombre.replace(' ', '_')}.pdf", mime="application/pdf", use_container_width=True)
